@@ -23,3 +23,11 @@ Built a production-style conversational agent using LangGraph that routes user i
 
 <img width="1787" height="233" alt="image" src="https://github.com/user-attachments/assets/e58d4370-ad8f-448f-ba08-32828d5e226f" />
 
+
+# 2__advanced_agent.py 
+
+## Added GUI using streamlit
+
+<img width="1905" height="920" alt="image" src="https://github.com/user-attachments/assets/48a77e06-9997-4088-ad4a-ab6b36ecea7a" />
+
+
