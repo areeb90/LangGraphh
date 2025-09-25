@@ -36,7 +36,11 @@ Built a production-style conversational agent using LangGraph that routes user i
 
 <img width="1920" height="912" alt="image" src="https://github.com/user-attachments/assets/ee6c125a-92a6-4d42-83e4-0c3d857f8da2" />
 
+<img width="1920" height="894" alt="image" src="https://github.com/user-attachments/assets/e475b34f-d10d-4772-8c0b-59648558a3c1" />
+
+
 ## folder structure
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/716fde07-68db-47c7-83cf-1dfcd900b751" />
+
 
