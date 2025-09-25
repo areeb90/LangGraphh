@@ -30,4 +30,10 @@ Built a production-style conversational agent using LangGraph that routes user i
 
 <img width="1905" height="920" alt="image" src="https://github.com/user-attachments/assets/48a77e06-9997-4088-ad4a-ab6b36ecea7a" />
 
+# advanced_agent_v2.py
+
+## Added persistent memory
+
+<img width="1920" height="912" alt="image" src="https://github.com/user-attachments/assets/ee6c125a-92a6-4d42-83e4-0c3d857f8da2" />
+
 
