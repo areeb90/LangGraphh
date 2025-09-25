@@ -34,6 +34,28 @@ Built a production-style conversational agent using LangGraph that routes user i
 
 ## Added persistent memory
 
+🧠 What is Persistent Memory (Chroma)?
+
+Normal LangGraph memory in your agent = short rolling summary (only keeps the last few turns).
+
+Persistent memory with Chroma = long-term memory stored on disk so your agent can recall things even after you stop and restart the app.
+
+It works like this:
+
+After each turn, you take a summary, fact, or preference and embed it (turn into a vector).
+
+Store that vector + the text in ChromaDB (a local vector database).
+
+Later, when the user asks something new, you query Chroma to fetch relevant old info → inject it into the system prompt.
+
+So persistent memory ≈ “a searchable notebook” of past conversations.
+
+🗂️ Where is it stored?
+
+By default, in a folder on disk (e.g. ./.arbii_memory/).
+
+Inside that folder, Chroma manages SQLite + Parquet files that hold vectors and metadata.
+
 <img width="1920" height="912" alt="image" src="https://github.com/user-attachments/assets/ee6c125a-92a6-4d42-83e4-0c3d857f8da2" />
 
 <img width="1920" height="894" alt="image" src="https://github.com/user-attachments/assets/e475b34f-d10d-4772-8c0b-59648558a3c1" />
@@ -42,5 +64,6 @@ Built a production-style conversational agent using LangGraph that routes user i
 ## folder structure
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/716fde07-68db-47c7-83cf-1dfcd900b751" />
+
 
 
