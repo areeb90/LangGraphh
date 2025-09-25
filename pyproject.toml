@@ -9,5 +9,6 @@ dependencies = [
     "langchain[anthropic]>=0.3.27",
     "langgraph>=0.6.7",
     "python-dotenv>=1.1.1",
+    "streamlit>=1.50.0",
     "typing-extensions>=4.15.0",
 ]
