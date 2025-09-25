@@ -26,6 +26,13 @@ import os
 from dotenv import load_dotenv
 import streamlit as st
 
+
+import os, uuid, textwrap
+from datetime import datetime
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
+
+
 # LangChain / LangGraph
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import (
@@ -75,6 +82,41 @@ TEMPERATURE = st.sidebar.slider("Temperature", 0.0, 1.0, 0.2, 0.05)
 
 def make_llm():
     return init_chat_model(DEFAULT_LLM_MODEL, model_kwargs={"temperature": TEMPERATURE})
+
+
+MEMORY_DIR = os.getenv("ARBII_MEMORY_DIR", ".arbii_memory")
+COLLECTION  = os.getenv("ARBII_MEMORY_COLLECTION", "arbii_mem")
+EMBED_MODEL = os.getenv("ARBII_EMBED_MODEL", "text-embedding-3-small")
+
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
+@st.cache_resource(show_spinner=False)
+def get_vectorstore():
+    embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
+    return Chroma(
+        collection_name=COLLECTION,
+        embedding_function=embeddings,
+        persist_directory=MEMORY_DIR,
+    )
+
+def memory_add(text: str, metadata: dict):
+    if not text or not text.strip():
+        return
+    vs = get_vectorstore()
+    vs.add_texts([text.strip()], metadatas=[metadata])
+    vs.persist()
+
+def memory_search(query: str, k: int = 4):
+    if not query or not query.strip():
+        return []
+    vs = get_vectorstore()
+    try:
+        return vs.similarity_search(query.strip(), k=k)
+    except Exception:
+        return []
+
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tools (very small + safe)
@@ -174,21 +216,33 @@ class AgentState(TypedDict):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def inject_system_node(state: AgentState) -> AgentState:
+    """Put a fresh SystemMessage (persona + summary + retrieved memory) each turn."""
     summary = state.get("summary", "")
+
+    # Query memories using the most recent user message
+    last_user = next((m for m in reversed(state.get("messages", [])) if isinstance(m, HumanMessage)), None)
+    retrieved_blurbs = []
+    if last_user:
+        docs = memory_search(last_user.content, k=4)
+        for d in docs:
+            snippet = d.page_content or ""
+            if snippet:
+                # keep it short to reduce prompt bloat
+                retrieved_blurbs.append("• " + textwrap.shorten(snippet.replace("\n"," "), width=220))
+
+    memory_block = ("\n\nRelevant memories:\n" + "\n".join(retrieved_blurbs)) if retrieved_blurbs else ""
+
     sys = SystemMessage(
         content=SYSTEM_PROMPT
         + (f"\n\nConversation summary: {summary}" if summary else "")
+        + memory_block
     )
 
     non_system = [m for m in state["messages"] if not isinstance(m, SystemMessage)]
     trimmed = non_system[-12:]
 
-    return {
-        "messages": [sys] + trimmed,
-        "summary": summary,
-        "intent": state.get("intent"),
-        "error": None,
-    }
+    return {"messages": [sys] + trimmed, "summary": summary, "intent": state.get("intent"), "error": None}
+
 
 
 def classify_node(state: AgentState) -> AgentState:
@@ -271,10 +325,21 @@ def clarifier_node(state: AgentState) -> AgentState:
 
 
 def summarize_node(state: AgentState) -> AgentState:
-    recent = [
-        m for m in state["messages"] if isinstance(m, (HumanMessage, AIMessage))
-    ][-4:]
-    return {"summary": update_summary(make_llm(), state.get("summary", ""), recent)}
+    """Update rolling summary, then store it to vector memory."""
+    recent = [m for m in state["messages"] if isinstance(m, (HumanMessage, AIMessage))][-4:]
+    new_summary = update_summary(make_llm(), state.get("summary", ""), recent)
+
+    if new_summary and new_summary.strip():
+        memory_add(
+            new_summary,
+            {
+                "type": "summary",
+                "session_id": st.session_state.session_id,
+                "ts": datetime.now().isoformat(timespec="seconds"),
+            },
+        )
+    return {"summary": new_summary}
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -333,20 +398,52 @@ if "chat_log" not in st.session_state:
 # ──────────────────────────────────────────────────────────────────────────────
 # Sidebar: Memory & Controls
 # ──────────────────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.subheader("Memory (rolling summary)")
-    st.write(st.session_state.agent_state.get("summary", "(empty)"))
+# with st.sidebar:
+#     st.subheader("Memory (rolling summary)")
+#     st.write(st.session_state.agent_state.get("summary", "(empty)"))
 
-    st.divider()
-    if st.button("🗑️ Clear conversation", use_container_width=True):
-        st.session_state.agent_state = {
-            "messages": [],
-            "summary": "",
-            "intent": None,
-            "error": None,
-        }
-        st.session_state.chat_log = []
-        st.rerun()
+#     st.divider()
+#     if st.button("🗑️ Clear conversation", use_container_width=True):
+#         st.session_state.agent_state = {
+#             "messages": [],
+#             "summary": "",
+#             "intent": None,
+#             "error": None,
+#         }
+#         st.session_state.chat_log = []
+#         st.rerun()
+
+st.subheader("Persistent Memory (Chroma)")
+vs = get_vectorstore()
+try:
+    count = vs._collection.count()  # type: ignore[attr-defined]
+except Exception:
+    count = None
+st.caption(f"Collection: {COLLECTION} • Dir: {MEMORY_DIR} • Items: {count if count is not None else '?'}")
+
+q = st.text_input("🔎 Search memories", key="mem_query")
+if q:
+    docs = memory_search(q, k=5) or []
+    for i, d in enumerate(docs, 1):
+        with st.expander(f"Result {i}"):
+            st.write(d.page_content)
+            st.code(d.metadata, language="json")
+
+if st.button("🧹 Wipe persistent memory", use_container_width=True):
+    import shutil
+    shutil.rmtree(MEMORY_DIR, ignore_errors=True)
+    get_vectorstore()  # re-init
+    st.success("Persistent memory wiped.")
+    st.rerun()
+
+# to check all the persisted memories stored in the vector store chromadb
+
+# docs = vs.get()
+# st.subheader("🔎 Persistent Memory Dump")
+# for doc, meta in zip(docs["documents"], docs["metadatas"]):
+#     st.write("•", doc)
+#     st.caption(meta)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helper: render a batch of new messages from the graph
