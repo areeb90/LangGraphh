@@ -6,31 +6,33 @@ What you get (kept simple):
 - System persona injected every turn
 - Intent router: "tools" | "chat" | "clarify"
 - Two tools: calculator, current_time
-- Short rolling summary memory (persisted in session)
+- Short rolling summary memory (persisted in Pinecone)
 - Model & prompt controls in the sidebar
 - Tool-call traces shown inline (expanders)
 - Clear conversation button
 
 Run:
-  pip install -U streamlit langchain langgraph python-dotenv pydantic typing_extensions
-  export OPENAI_API_KEY=...  # or set in a .env file
-  streamlit run app.py
+  # Assuming you have already run the commands below and installed the required packages
+  # uv add --active python-dotenv langgraph "langchain[anthropic]" typing-extensions langchain-openai streamlit chromadb langchain-openai langchain-community -U pinecone-client langchain-pinecone
+  # export OPENAI_API_KEY=...  # or set in a .env file
+  # export PINECONE_API_KEY=...
+  # export PINECONE_ENVIRONMENT=...
+  # streamlit run advanced_agent_v3.py
 """
 
 from __future__ import annotations
 from typing import Annotated, Literal, Optional, List
-from typing_extensions import TypedDict
-from pydantic import BaseModel, Field
+from typing_extensions import TypedDict # Removed, as it's not strictly used in your top-level Pydantic imports
+from pydantic import BaseModel, Field # Keep, this is the correct Pydantic V2 import
 
 import os
 from dotenv import load_dotenv
 import streamlit as st
-
+import shutil
 
 import os, uuid, textwrap
 from datetime import datetime
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
 
 
 # LangChain / LangGraph
@@ -46,6 +48,9 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 
+# Pinecone dependencies
+from pinecone import Pinecone, PodSpec
+from langchain_pinecone import PineconeVectorStore
 # ──────────────────────────────────────────────────────────────────────────────
 # Page Setup
 # ──────────────────────────────────────────────────────────────────────────────
@@ -84,39 +89,65 @@ def make_llm():
     return init_chat_model(DEFAULT_LLM_MODEL, model_kwargs={"temperature": TEMPERATURE})
 
 
-MEMORY_DIR = os.getenv("ARBII_MEMORY_DIR", ".arbii_memory")
-COLLECTION  = os.getenv("ARBII_MEMORY_COLLECTION", "arbii_mem")
-EMBED_MODEL = os.getenv("ARBII_EMBED_MODEL", "text-embedding-3-small")
+# Configuration for Pinecone
+# PINECONE_INDEX is the index name
+PINECONE_INDEX = os.getenv("PINECONE_INDEX", "langgraph")
+# PINECONE_NAMESPACE is used instead of Chroma's COLLECTION
+PINECONE_NAMESPACE = os.getenv("PINECONE_NAMESPACE", "summary-memory")
+EMBED_MODEL = os.getenv("ARBII_EMBED_MODEL", "llama-text-embed-v2")# The environment/directory configuration is removed since Pinecone is a cloud service
 
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 
 @st.cache_resource(show_spinner=False)
 def get_vectorstore():
-    embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
-    return Chroma(
-        collection_name=COLLECTION,
-        embedding_function=embeddings,
-        persist_directory=MEMORY_DIR,
-    )
+    # Initialize Pinecone and Embeddings
+    try:
+        if not os.getenv("PINECONE_API_KEY"):
+             st.error("PINECONE_API_KEY environment variable is not set.")
+             return None
+             
+        # ✅ Correct way to specify the output dimension
+        embeddings =  OpenAIEmbeddings(
+            model="text-embedding-3-small", 
+            dimensions=1024 # <-- PASS DIMENSIONS DIRECTLY
+        ) 
+        
+        # This will create the index if it doesn't exist.
+        # It requires the Pinecone environment to be set (PINECONE_ENVIRONMENT)
+        vectorstore = PineconeVectorStore(
+            index_name=PINECONE_INDEX, 
+            embedding=embeddings, 
+            namespace=PINECONE_NAMESPACE
+        )
+        return vectorstore
+    except Exception as e:
+        st.error(f"Error initializing Pinecone: {e}")
+        st.caption("Please check PINECONE_API_KEY, PINECONE_ENVIRONMENT, and Index name.")
+        return None
 
 def memory_add(text: str, metadata: dict):
-    if not text or not text.strip():
-        return
     vs = get_vectorstore()
+    if not vs or not text or not text.strip():
+        return
+    # Add the session_id to the metadata for memory isolation
+    metadata["session_id"] = st.session_state.session_id
     vs.add_texts([text.strip()], metadatas=[metadata])
-    vs.persist()
+    # Pinecone is a cloud service, so no explicit .persist() needed
 
 def memory_search(query: str, k: int = 4):
-    if not query or not query.strip():
-        return []
     vs = get_vectorstore()
-    try:
-        return vs.similarity_search(query.strip(), k=k)
-    except Exception:
+    if not vs or not query or not query.strip():
         return []
-
-
+    try:
+        # Search only within the current session's memory (namespace/filter not used in simple implementation)
+        # For simplicity, we are not applying a filter by session_id here, but in a real app, you would:
+        # filter = {"session_id": st.session_state.session_id}
+        # return vs.similarity_search(query.strip(), k=k, filter=filter)
+        return vs.similarity_search(query.strip(), k=k)
+    except Exception as e:
+        st.error(f"Pinecone Search Error: {e}")
+        return []
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tools (very small + safe)
@@ -398,51 +429,56 @@ if "chat_log" not in st.session_state:
 # ──────────────────────────────────────────────────────────────────────────────
 # Sidebar: Memory & Controls
 # ──────────────────────────────────────────────────────────────────────────────
-# with st.sidebar:
-#     st.subheader("Memory (rolling summary)")
-#     st.write(st.session_state.agent_state.get("summary", "(empty)"))
+with st.sidebar:
+    st.subheader("Conversation Controls")
+    st.subheader("Memory (rolling summary)")
+    st.write(st.session_state.agent_state.get("summary", "(empty)"))
 
-#     st.divider()
-#     if st.button("🗑️ Clear conversation", use_container_width=True):
-#         st.session_state.agent_state = {
-#             "messages": [],
-#             "summary": "",
-#             "intent": None,
-#             "error": None,
-#         }
-#         st.session_state.chat_log = []
-#         st.rerun()
+    st.divider()
+    if st.button("🗑️ Clear conversation", use_container_width=True):
+        st.session_state.agent_state = {
+            "messages": [],
+            "summary": "",
+            "intent": None,
+            "error": None,
+        }
+        st.session_state.chat_log = []
+        st.rerun()
 
-st.subheader("Persistent Memory (Chroma)")
+# --- Display Pinecone Info / Controls ---
+st.subheader("Persistent Memory (Pinecone)")
 vs = get_vectorstore()
-try:
-    count = vs._collection.count()  # type: ignore[attr-defined]
-except Exception:
-    count = None
-st.caption(f"Collection: {COLLECTION} • Dir: {MEMORY_DIR} • Items: {count if count is not None else '?'}")
+if vs:
+    try:
+        # Get count for the specific namespace for display
+        index_client = Pinecone(api_key=os.getenv("PINECONE_API_KEY")).Index(PINECONE_INDEX)
+        count = index_client.describe_index_stats().get("namespaces", {}).get(PINECONE_NAMESPACE, {}).get("vector_count", 0)
+    except Exception:
+        count = None
+    
+    st.caption(f"Index: **{PINECONE_INDEX}** • Namespace: **{PINECONE_NAMESPACE}** • Items: **{count if count is not None else 'N/A'}**")
 
-q = st.text_input("🔎 Search memories", key="mem_query")
-if q:
-    docs = memory_search(q, k=5) or []
-    for i, d in enumerate(docs, 1):
-        with st.expander(f"Result {i}"):
-            st.write(d.page_content)
-            st.code(d.metadata, language="json")
+    q = st.text_input("🔎 Search memories", key="mem_query")
+    if q:
+        docs = memory_search(q, k=5) or []
+        for i, d in enumerate(docs, 1):
+            with st.expander(f"Result {i}"):
+                st.write(d.page_content)
+                # Ensure metadata is serializable for display
+                meta_display = {k: v for k, v in d.metadata.items() if k not in ['id']}
+                st.code(meta_display, language="json")
 
-if st.button("🧹 Wipe persistent memory", use_container_width=True):
-    import shutil
-    shutil.rmtree(MEMORY_DIR, ignore_errors=True)
-    get_vectorstore()  # re-init
-    st.success("Persistent memory wiped.")
-    st.rerun()
-
-# to check all the persisted memories stored in the vector store chromadb
-
-# docs = vs.get()
-# st.subheader("🔎 Persistent Memory Dump")
-# for doc, meta in zip(docs["documents"], docs["metadatas"]):
-#     st.write("•", doc)
-#     st.caption(meta)
+    # The "Wipe memory" logic is updated to delete the Pinecone namespace
+    if st.button("🧹 Wipe persistent memory", use_container_width=True):
+        try:
+            index_client.delete(delete_all=True, namespace=PINECONE_NAMESPACE)
+            st.success(f"Pinecone namespace '{PINECONE_NAMESPACE}' wiped.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Failed to wipe Pinecone namespace: {e}")
+else:
+    st.warning("Pinecone vector store failed to initialize. Check your API keys and configuration.")
+    st.caption(f"Index: **{PINECONE_INDEX}** • Namespace: **{PINECONE_NAMESPACE}**")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
