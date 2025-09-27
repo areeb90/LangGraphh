@@ -10,6 +10,7 @@ dependencies = [
     "langchain-openai>=0.3.33",
     "langchain[anthropic]>=0.3.27",
     "langgraph>=0.6.7",
+    "pinecone-client>=6.0.0",
     "python-dotenv>=1.1.1",
     "streamlit>=1.50.0",
     "typing-extensions>=4.15.0",

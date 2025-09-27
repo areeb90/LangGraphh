@@ -46,6 +46,9 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 
+from pinecone import Pinecone, PodSpec
+from langchain_pinecone import PineconeVectorStore
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Page Setup
 # ──────────────────────────────────────────────────────────────────────────────
