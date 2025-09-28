@@ -90,5 +90,9 @@ a persistent memory panel (queryable, count shown, wipe button).
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/716fde07-68db-47c7-83cf-1dfcd900b751" />
 
 
-# advanced_agent_v2.py
+# advanced_agent_v3.py
 <img width="1918" height="900" alt="image" src="https://github.com/user-attachments/assets/d40ad54d-48af-496f-804e-d954d1b47092" />
+
+
+## folder structure
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/6e303638-75d8-40b1-aecf-2bc57edbf4ad" />
