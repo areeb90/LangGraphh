@@ -121,20 +121,7 @@ Exact versions should be pinned in `requirements.txt` for reproducible builds.
 
 ---
 
-## Resume bullets & Interview pitch
-
-**Sample resume bullets**
-
-* Built *Aster*, a Streamlit-based conversational agent using LangGraph/LangChain for intent routing, tool invocation, and Pinecone-backed retrieval memory.
-* Implemented LLM-generated rolling summaries, vectorized storage in Pinecone, and retrieval-augmented prompts to reduce hallucinations and extend context.
-
-**Elevator pitch**
-
-> Aster is a demo agent that routes user requests to tools or chat, persists concise LLM-generated summaries to a vector DB for retrieval, and exposes runtime controls — it showcases RAG, tool-enabled agents, and practical conversational design.
-
----
-
-## Improvements / Roadmap (prioritized)
+## Improvements / Roadmap (prioritized) (Upcoming Features)
 
 1. Authentication & multi-user isolation (OAuth/JWT + memory filtering by `session_id`).
 2. Add richer toolset (web search, calendar, safe code execution sandbox).
@@ -156,11 +143,6 @@ Exact versions should be pinned in `requirements.txt` for reproducible builds.
 
 ---
 
-## Contributing
-
-Contributions, issues, and feature requests are welcome. Feel free to open an issue for changes or create a PR with tests/documentation.
-
----
 
 ## Tech: Python · LangGraph · LangChain · OpenAI (GPT-4o-mini) · Pydantic · dotenv
 
@@ -171,10 +153,7 @@ Choose an appropriate license (e.g., MIT) and include a `LICENSE` file.
 
 ---
 
-## Next steps
-
-* I can generate a visual diagram (SVG/PNG), produce a Dockerfile, or create PR-ready patches to implement one of the roadmap items (auth, FAISS replace, richer tools). Tell me which you want and I’ll prepare it.
-
+## Screenshots of the App: Aster
 
 <img width="1805" height="484" alt="image" src="https://github.com/user-attachments/assets/0800b7c8-cc14-4aa1-a2c3-fe16b85747a2" />
 
@@ -257,4 +236,5 @@ a persistent memory panel (queryable, count shown, wipe button).
 
 ## folder structure
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/6e303638-75d8-40b1-aecf-2bc57edbf4ad" />
+
 
